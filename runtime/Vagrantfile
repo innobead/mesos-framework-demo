@@ -1,0 +1,102 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+nodes = {
+    :master => [
+        {
+            :name =>'mesos.master1',
+            :ip => '192.168.90.2'
+        }
+    ],
+    :agent => [
+        {
+            :name =>'mesos.agent1',
+            :ip => '192.168.90.12'
+        }
+    ]
+}
+
+port_mappings = {
+    5050 => 5050, # Mesos master
+    # 5051 => 5051, # Mesos slave
+    2181 => 2181, # ZK
+    8080 => 8080, # Marathon
+    8081 => 8081, # ZK exhibitor
+    8123 => 8123, # Mesos DNS
+}
+
+provision_dir = File.join(__dir__, 'provision')
+
+
+Vagrant.configure('2') do |config|
+
+  unless Vagrant.has_plugin?('vagrant-vbguest')
+    raise "Please install vagrant-vbguest, 'vagrant plugin install vagrant-vbguest' for shared folder functions working"
+  end
+
+  config.vbguest.auto_update = true
+
+  unless Vagrant.has_plugin?('vagrant-hostmanager')
+    raise "Please install vagrant-hostmanager, 'vagrant plugin install vagrant-hostmanager' for hosts file update"
+  end
+
+  config.hostmanager.enabled = true
+  config.hostmanager.manage_host = true
+  config.hostmanager.guest_host = true
+
+  nodes.each do |type, names|
+    names.each do |node_info|
+      config.vm.define node_info[:name] do |node|
+        node.vm.box = 'centos/7'
+        node.vm.box_check_update = true
+
+        node.vm.hostname = node_info[:name]
+
+        node.vm.network 'private_network', ip: node_info[:ip]
+
+        # machine.vm.network 'public_network'
+
+        node.vm.synced_folder '.', '/vagrant', type: "nfs"
+
+        node.vm.provider 'virtualbox' do |vb|
+          vb.gui = false
+          vb.customize ['modifyvm', :id, '--natnet2', 'default']
+          vb.name = node_info[:name]
+
+          if type == :master
+            vb.cpus = 2
+            vb.memory = 2048
+          else
+            vb.cpus = 2
+            vb.memory = 4096
+          end
+        end
+
+        if node_info[:name] == 'mesos.master1'
+          port_mappings.each do |guest_port, host_port|
+            node.vm.network "forwarded_port", guest: guest_port, host: host_port
+          end
+        end
+
+        node.vm.provision :hostmanager
+
+        # Hack to remove loopback host alias that conflicts with vagrant-hostmanager
+        # https://jira.mesosphere.com/browse/DCOS_VAGRANT-15
+        node.vm.provision :shell, inline: "sed -i'' '/^127.0.0.1\\t#{node.vm.hostname}/d' /etc/hosts"
+
+        node.vm.provision :shell, path: "#{provision_dir}/install_pre.sh"
+
+        if type == :master
+          node.vm.provision :shell, path: "#{provision_dir}/install_zookeeper.sh"
+          node.vm.provision :shell, path: "#{provision_dir}/install_exhibitor.sh"
+          node.vm.provision :shell, path: "#{provision_dir}/install_mesos_master.sh"
+          node.vm.provision :shell, path: "#{provision_dir}/install_mesos_dns.sh"
+          node.vm.provision :shell, path: "#{provision_dir}/install_marathon.sh"
+        end
+
+        node.vm.provision :shell, path: "#{provision_dir}/install_mesos_agent.sh"
+        node.vm.provision :shell, inline: "sed -i '1i nameserver mesos.master1' /etc/resolv.conf"
+      end
+    end
+  end
+end

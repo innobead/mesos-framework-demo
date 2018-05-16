@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option java_package = "example.mesos.grpc";
+option java_multiple_files = true;
+
+import "example/mesos/proto/message.proto";
+import "google/protobuf/empty.proto";
+
+service ClusterConfigService {
+    rpc updateConfig (ClusterConfig) returns (google.protobuf.Empty) {
+    }
+    rpc getConfig (google.protobuf.Empty) returns (ClusterConfig) {
+    }
+    rpc getRuntimeConfig (google.protobuf.Empty) returns (ClusterRuntimeConfig) {
+    }
+}

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option java_package = "example.mesos.proto";
+option java_multiple_files = true;
+
+import "google/protobuf/any.proto";
+
+message ClusterConfig {
+    message GeneralConfig {
+        double cpu_of_node = 1;
+        double mem_of_node = 2;
+    }
+
+    GeneralConfig general_config = 1;
+    int32 num_of_node = 2;
+}
+
+message ClusterRuntimeConfig {
+    int32 num_of_node = 1;
+    int32 num_of_live_node = 2;
+}

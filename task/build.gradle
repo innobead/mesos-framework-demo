@@ -1,0 +1,41 @@
+buildscript {
+    apply from: "${rootDir}/repos_buildscript.gradle", to: buildscript
+
+    ext {
+        pythonPlulginVersion = '1.1.4'
+    }
+
+    dependencies {
+        classpath "gradle.plugin.com.innobead:gradle-python-plugin:${pythonPlulginVersion}"
+    }
+}
+
+apply from: "${rootDir}/repos.gradle", to: repositories
+
+apply plugin: 'com.innobead.python'
+
+ext {
+    dockerPush = project.hasProperty('push')
+    dockerTag = "localhost:5000/mesos/${project.name}"
+}
+
+python {
+    sourceDirs = files('src')
+    testSourceDirs = files('tests')
+}
+
+task distDocker {
+    dependsOn(build)
+
+    doFirst {
+        project.exec {
+            commandLine("docker build -t ${dockerTag} ${projectDir}".split())
+        }.assertNormalExitValue()
+
+        if (dockerPush) {
+            project.exec {
+                commandLine("docker push ${dockerTag}".split())
+            }.assertNormalExitValue()
+        }
+    }
+}

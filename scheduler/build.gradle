@@ -1,0 +1,138 @@
+buildscript {
+    apply from: "${rootDir}/repos_buildscript.gradle", to: buildscript
+
+    ext {
+        nebulaKotlinVersion = '1.2.41'
+        nebulaPluginVersion = '7.0.6'
+        junitPluginVersion = '1.1.1'
+        dockerPluginVersion = '1.2'
+        protobufPluginVersion = '0.8.5'
+    }
+
+    dependencies {
+        classpath "se.transmode.gradle:gradle-docker:$dockerPluginVersion"
+        classpath "com.netflix.nebula:nebula-kotlin-plugin:$nebulaKotlinVersion"
+        classpath "org.junit.platform:junit-platform-gradle-plugin:$junitPluginVersion"
+        classpath "com.netflix.nebula:nebula-publishing-plugin:$nebulaPluginVersion"
+        classpath "com.google.protobuf:protobuf-gradle-plugin:$protobufPluginVersion"
+    }
+}
+
+apply from: "${rootDir}/repos.gradle", to: repositories
+
+apply plugin: 'nebula.kotlin'
+apply plugin: 'docker'
+apply plugin: 'application'
+apply plugin: 'com.google.protobuf'
+apply plugin: 'nebula.maven-publish'
+apply plugin: 'maven'
+apply plugin: 'org.junit.platform.gradle.plugin'
+apply plugin: 'jacoco'
+
+ext {
+    kotlinLoggingVersion = '1.4.9'
+    kotlinCoroutineVersion = '0.22.5'
+    jacksonKotlinVersion = '2.9.+'
+    config4kVersion = '0.3.4'
+    logbackVersion = '1.2.3'
+
+    mesosVersion = '1.5.0'
+    protocVersion = '3.5.1-1'
+    protocGenGrpcVersion = '1.11.0'
+    grpcVersion = '1.11.0'
+    nettyTcnativeVersion = '2.0.8.Final'
+    curatorVersion = '2.12.0'
+    timeVersion = '1.0.1'
+
+    junitJupiterVersion = '5.1.0'
+    nebulaPluginVersion = '7.0.6'
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+mainClassName = 'example.mesos.App'
+applicationName = 'mesos-scheduler'
+applicationDefaultJvmArgs = []
+
+kotlin {
+    experimental {
+        coroutines 'enable'
+    }
+}
+
+dependencies {
+    /**
+     * Notes: install Mesos to have libmesos.so in java.library.path
+     */
+
+    compile "org.jetbrains.kotlin:kotlin-reflect"
+    compile "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinCoroutineVersion"
+
+    compile "io.github.microutils:kotlin-logging:$kotlinLoggingVersion"
+    compile "ch.qos.logback:logback-classic:$logbackVersion"
+    compile "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonKotlinVersion"
+    compile "io.github.config4k:config4k:$config4kVersion"
+
+    compile "org.apache.mesos:mesos:$mesosVersion"
+
+    compile "io.grpc:grpc-netty:$grpcVersion"
+    compile "io.grpc:grpc-protobuf:$grpcVersion"
+    compile "io.grpc:grpc-stub:$grpcVersion"
+    compile "io.grpc:grpc-services:$grpcVersion"
+    compile "io.netty:netty-tcnative-boringssl-static:$nettyTcnativeVersion"
+
+    compile "org.apache.curator:curator-framework:$curatorVersion"
+    compile "com.github.kizitonwose.time:time:$timeVersion"
+
+    testCompile "org.junit.jupiter:junit-jupiter-api:$junitJupiterVersion"
+    testRuntime "org.junit.jupiter:junit-jupiter-engine:$junitJupiterVersion"
+    testRuntime "org.junit.platform:junit-platform-launcher:$junitPluginVersion"
+}
+
+protobuf {
+    generatedFilesBaseDir = new File(projectDir, 'generated')
+
+    protoc {
+        artifact = "com.google.protobuf:protoc:$protocVersion"
+    }
+
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:$protocGenGrpcVersion"
+        }
+    }
+
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+compileKotlin {
+    dependsOn "generateProto"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs(
+                    "${protobuf.generatedFilesBaseDir}/main/java",
+                    "${protobuf.generatedFilesBaseDir}/main/grpc"
+            )
+        }
+    }
+}
+
+clean {
+    delete fileTree(protobuf.generatedFilesBaseDir)
+}
+
+distDocker {
+    dockerfile = 'Dockerfile'
+    push = project.hasProperty('push')
+    tag = "localhost:5000/mesos/${project.name}"
+
+    runCommand("ln -s /${project.name + '-' + project.version} /${project.name}")
+}

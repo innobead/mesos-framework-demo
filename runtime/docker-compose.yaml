@@ -1,0 +1,148 @@
+version: '3.6'
+
+services:
+  zookeeper:
+    image: netflixoss/exhibitor:1.5.2
+    restart: always
+    ports:
+      - 2181:2181
+      - 8081:8080
+    networks:
+      - net
+    dns: 172.16.30.100
+    volumes:
+      - ./config/zoo.cfg:/zookeeper/conf/zoo.cfg
+      - zookeeper_data:/zookeeper/data
+
+  mesos.master:
+    image: mesosphere/mesos-master:1.5.0
+    restart: always
+    ports:
+      - 5050:5050
+    networks:
+      - net
+    depends_on:
+      - zookeeper
+    environment:
+      # Modify /etc/hosts on host to make mesos web w/ timeout issue
+      MESOS_HOSTNAME: mesos.master
+
+      MESOS_WORK_DIR: /var/lib/mesos/master
+      MESOS_LOG_DIR: /var/log/mesos
+      MESOS_ZK: zk://zookeeper:2181/mesos
+      MESOS_CLUSTER: mesos
+    dns: 172.16.30.100
+    volumes:
+      - mesos_master:/var/lib/mesos/master
+
+  mesos.agent:
+    # Official mesos-slave-dind does not have 1.5.0 yet
+    build: docker/mesos_agent
+    # Image: mesosphere/mesos-slave-dind:0.4.0_mesos-1.4.1_docker-17.05.0_ubuntu-16.04.3
+
+    restart: always
+    ports:
+      - 5051:5051
+      - 5005:5005 # JMX debugging
+      - 8888:8888 # for scheduler testing
+    networks:
+      - net
+    depends_on:
+      - mesos.master
+    privileged: true
+    environment:
+      # Env var used in docker wrapper script in dind
+      DOCKER_DAEMON_ARGS: --insecure-registry docker.registry
+
+      MESOS_HOSTNAME: mesos.agent
+      MESOS_IMAGE_PROVIDERS: appc,docker
+      MESOS_CONTAINERIZERS: mesos,docker
+      MESOS_RESOURCES: cpus:2;mem:2048;disk:25600;ports:[2000-30000]
+      MESOS_MASTER: zk://zookeeper:2181/mesos
+      MESOS_WORK_DIR: /var/lib/mesos/agent
+      MESOS_LOG_DIR: /var/log/mesos
+      MESOS_EXECUTOR_REGISTRATION_TIMEOUT: 10mins
+      MESOS_SYSTEMD_ENABLE_SUPPORT: 'false'
+      MESOS_RECONFIGURATION_POLICY: additive
+
+      # Not all MESOS_ISOLATION not supported
+      MESOS_ISOLATION: filesystem/linux,docker/runtime
+
+    dns: 172.16.30.100
+    volumes:
+      - mesos_agent:/var/lib/mesos/agent
+
+  marathon:
+    image: mesosphere/marathon
+    restart: always
+    ports:
+      - 8080:8080
+    networks:
+      - net
+    depends_on:
+      - mesos.master
+    dns: 172.16.30.100
+    command: --master zk://zookeeper:2181/mesos --zk zk://zookeeper:2181/marathon
+
+  mesos.dns:
+    image: mesosphere/mesos-dns:v0.6.0
+    ports:
+      - 8123:8123
+      - 53:53/udp
+    networks:
+      net:
+        ipv4_address: 172.16.30.100
+    depends_on:
+      - mesos.master
+      - mesos.agent
+    volumes:
+      - ./config/mesos_dns_config.json:/config.json
+      - dns_log:/tmp
+    command: /usr/bin/mesos-dns -v=2 -config=/config.json
+
+  dnsutils:
+    image: tutum/dnsutils
+    restart: always
+    networks:
+      - net
+    dns:
+      - 172.16.30.100
+      - 8.8.8.8
+    command: tail -f /dev/null
+
+  docker.registry:
+    image: registry:2
+    restart: always
+    networks:
+      - net
+    ports:
+      - 5000:443
+    environment:
+      REGISTRY_HTTP_ADDR: 0.0.0.0:443
+      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/server.crt
+      REGISTRY_HTTP_TLS_KEY: /certs/server.key
+    volumes:
+      - type: bind
+        source: ./config/server.crt
+        target: /certs/server.crt
+        read_only: true
+      - type: bind
+        source: ./config/server.key
+        target: /certs/server.key
+        read_only: true
+      - docker_registry:/var/lib/registry
+
+volumes:
+  zookeeper_data:
+  mesos_master:
+  mesos_agent:
+  dns_log:
+  docker_registry:
+
+networks:
+  net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.30.0/24

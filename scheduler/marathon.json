@@ -1,0 +1,20 @@
+{
+  "id": "/scheduler",
+  "cmd": null,
+  "cpus": 0.5,
+  "mem": 128,
+  "disk": 0,
+  "instances": 1,
+  "container": {
+    "docker": {
+      "image": "docker.registry/mesos/scheduler:latest",
+      "forcePullImage": true
+    },
+    "type": "DOCKER"
+  },
+  "networks": [
+    {
+      "mode": "host"
+    }
+  ]
+}

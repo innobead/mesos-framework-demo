@@ -1,0 +1,17 @@
+allprojects {
+	apply plugin: 'idea'
+}
+
+idea.project { 
+	modules = modules.findAll { 
+		it.name != name 
+	}
+}
+
+configure(subprojects.findAll { it.name in ['executor'] }) {
+	idea.module {
+		sourceDirs += files('src')
+    	testSourceDirs += files('tests')
+	}
+}
+

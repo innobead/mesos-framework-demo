@@ -1,0 +1,6 @@
+setup.py
+src/example.mesos.executor.egg-info/PKG-INFO
+src/example.mesos.executor.egg-info/SOURCES.txt
+src/example.mesos.executor.egg-info/dependency_links.txt
+src/example.mesos.executor.egg-info/requires.txt
+src/example.mesos.executor.egg-info/top_level.txt
