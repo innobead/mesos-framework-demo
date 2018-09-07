@@ -1,6 +1,9 @@
 ## Goals 
 - Setup a Mesos development environment including Mesos master & agent, Zookeeper w/ exhibitor, Marathon      
-- Create a Mesos framework/scheduler, use default command executor, then launch scalable tasks running      
+- Create a Mesos framework/scheduler, use default command executor, then launch scalable tasks running   
+
+## Demo
+[![Demo Video](http://img.youtube.com/vi/FYWyFBmAv-Q/0.jpg)](https://www.youtube.com/watch?v=FYWyFBmAv-Q)
       
 ## Prerequisites 
 - 3 CPU, 4GB Memory for Docker
